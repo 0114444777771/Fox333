@@ -7,7 +7,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyA_bE6gzFdIFfKQySJQi7uudfgvaVBAlxI",
   authDomain: "fox2-77fdd.firebaseapp.com",
   projectId: "fox2-77fdd",
-  storageBucket: "fox2-77fdd.firebasestorage.app",
+  storageBucket: "fox2-77fdd.appspot.com", // تم التصحيح هنا
   messagingSenderId: "442481432364",
   appId: "1:442481432364:web:eb72754872a4bd1eedbe89",
   measurementId: "G-CYKGWRT6FT"
