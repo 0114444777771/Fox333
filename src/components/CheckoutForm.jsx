@@ -6,7 +6,7 @@ import { useCart } from '@/contexts/CartContext';
 import { useToast } from '@/components/ui/use-toast';
 import { db } from '@/firebase';
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
-import emailjs from '@emailjs/browser'; // استيراد EmailJS
+import emailjs from '@emailjs/browser';
 
 const CheckoutForm = () => {
   const navigate = useNavigate();
@@ -36,53 +36,47 @@ const CheckoutForm = () => {
     setIsSubmitting(true);
 
     try {
-      // إنشاء كائن الطلب وإضافة توقيت الإنشاء
       const order = {
         ...formData,
         cartItems,
         createdAt: Timestamp.now(),
       };
 
-      // حفظ الطلب في مجموعة "orders" بداخل Firebase Firestore
       const docRef = await addDoc(collection(db, 'orders'), order);
 
-      // حساب إجمالي السعر
       const total = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0)
-                      .toLocaleString() + ' جنيه مصري';
+                        .toLocaleString() + ' جنيه مصري';
 
-      // إرسال بريد إلكتروني للتاجر باستخدام EmailJS
       const traderResponse = await emailjs.send(
-        'service_pllfmfx',      // معرف الخدمة من EmailJS
-        'template_z9q8e8p',      // قالب بريد التاجر
+        'service_pllfmfx',
+        'template_z9q8e8p',
         {
           ...formData,
           orderId: docRef.id,
           cartItems: cartItems.map(item => `${item.name} x${item.quantity}`).join(', '),
-          total, // الإجمالي
+          total,
           address: formData.address,
         },
-        'xpSKf6d4h11LzEOLz'      // المفتاح العام من EmailJS
+        'xpSKf6d4h11LzEOLz'
       );
 
-      // التحقق من نجاح إرسال البريد للتاجر، ثم إرسال البريد للعميل
       if (traderResponse.status === 200) {
         await emailjs.send(
-          'service_pllfmfx',      // نفس معرف الخدمة
-          'template_client',      // قالب بريد العميل
+          'service_pllfmfx',
+          'template_client',
           {
-            to_name: `${formData.firstName} ${formData.lastName}`, // اسم العميل
-            to_email: formData.email,                               // بريد العميل
-            orderId: docRef.id,                                     // رقم الطلب
-            total,                                                // الإجمالي
-            address: formData.address,                              // العنوان
+            to_name: `${formData.firstName} ${formData.lastName}`,
+            to_email: formData.email,
+            orderId: docRef.id,
+            total,
+            address: formData.address,
             cartItems: cartItems.map(item => `${item.name} x${item.quantity}`).join(', '),
-            support_email: 'support@yourwebsite.com'                // بريد الدعم
+            support_email: 'support@yourwebsite.com'
           },
-          'xpSKf6d4h11LzEOLz'      // نفس المفتاح العام
+          'xpSKf6d4h11LzEOLz'
         );
       }
 
-      // تفريغ السلة بعد نجاح حفظ الطلب وإرسال الإشعارات
       clearCart();
 
       toast({
@@ -91,12 +85,12 @@ const CheckoutForm = () => {
         duration: 5000,
       });
 
-      // إعادة التوجيه إلى الصفحة الرئيسية أو إلى صفحة نجاح الطلب
       navigate('/');
     } catch (error) {
+      console.error("Checkout Error:", error); // هذا السطر لعرض الخطأ في الكونسول
       toast({
         title: "حدث خطأ",
-        description: `لم يتم إرسال الطلب. حاول مرة أخرى. (${error.message})`,
+        description: `لم يتم إرسال الطلب. حاول مرة أخرى. (${error.message || "خطأ غير معروف"})`,
         duration: 5000,
       });
     } finally {
@@ -106,7 +100,6 @@ const CheckoutForm = () => {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* الحقول الشخصية */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label htmlFor="firstName" className="block text-sm font-medium mb-1">
@@ -134,7 +127,6 @@ const CheckoutForm = () => {
         </div>
       </div>
 
-      {/* الحقول للتواصل */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label htmlFor="email" className="block text-sm font-medium mb-1">
@@ -164,7 +156,6 @@ const CheckoutForm = () => {
         </div>
       </div>
 
-      {/* عنوان الشحن */}
       <div>
         <label htmlFor="address" className="block text-sm font-medium mb-1">
           العنوان
@@ -178,7 +169,6 @@ const CheckoutForm = () => {
         />
       </div>
 
-      {/* المدينة والرمز البريدي */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label htmlFor="city" className="block text-sm font-medium mb-1">
@@ -206,7 +196,6 @@ const CheckoutForm = () => {
         </div>
       </div>
 
-      {/* طريقة الدفع */}
       <div>
         <h3 className="text-lg font-medium mb-3">طريقة الدفع</h3>
         <div className="space-y-2">
@@ -241,7 +230,6 @@ const CheckoutForm = () => {
         </div>
       </div>
 
-      {/* زر الإرسال */}
       <Button 
         type="submit" 
         className="w-full"
