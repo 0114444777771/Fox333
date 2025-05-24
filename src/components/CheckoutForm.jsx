@@ -1,16 +1,18 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useCart } from '@/contexts/CartContext';
 import { useToast } from '@/components/ui/use-toast';
+import { db } from '@/firebase';
+import { collection, addDoc, Timestamp } from 'firebase/firestore';
+import emailjs from '@emailjs/browser'; // استيراد EmailJS
 
 const CheckoutForm = () => {
   const navigate = useNavigate();
   const { cartItems, clearCart } = useCart();
   const { toast } = useToast();
-  
+
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -21,54 +23,90 @@ const CheckoutForm = () => {
     postalCode: '',
     paymentMethod: 'cod'
   });
-  
+
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
-  
-  const handleSubmit = (e) => {
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
-    // Simulate order processing
-    setTimeout(() => {
-      // Save order to localStorage
+
+    try {
+      // إنشاء كائن الطلب وإضافة توقيت الإنشاء
       const order = {
-        id: `ORD-${Date.now()}`,
-        date: new Date().toISOString(),
-        items: cartItems,
-        total: cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0) + 15,
-        shipping: 15,
-        customer: formData,
-        status: 'pending'
+        ...formData,
+        cartItems,
+        createdAt: Timestamp.now(),
       };
-      
-      // Get existing orders or initialize empty array
-      const existingOrders = JSON.parse(localStorage.getItem('orders') || '[]');
-      localStorage.setItem('orders', JSON.stringify([...existingOrders, order]));
-      
-      // Clear cart
+
+      // حفظ الطلب في مجموعة "orders" بداخل Firebase Firestore
+      const docRef = await addDoc(collection(db, 'orders'), order);
+
+      // حساب إجمالي السعر
+      const total = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0)
+                      .toLocaleString() + ' جنيه مصري';
+
+      // إرسال بريد إلكتروني للتاجر باستخدام EmailJS
+      const traderResponse = await emailjs.send(
+        'service_pllfmfx',      // معرف الخدمة من EmailJS
+        'template_z9q8e8p',      // قالب بريد التاجر
+        {
+          ...formData,
+          orderId: docRef.id,
+          cartItems: cartItems.map(item => `${item.name} x${item.quantity}`).join(', '),
+          total, // الإجمالي
+          address: formData.address,
+        },
+        'xpSKf6d4h11LzEOLz'      // المفتاح العام من EmailJS
+      );
+
+      // التحقق من نجاح إرسال البريد للتاجر، ثم إرسال البريد للعميل
+      if (traderResponse.status === 200) {
+        await emailjs.send(
+          'service_pllfmfx',      // نفس معرف الخدمة
+          'template_client',      // قالب بريد العميل
+          {
+            to_name: `${formData.firstName} ${formData.lastName}`, // اسم العميل
+            to_email: formData.email,                               // بريد العميل
+            orderId: docRef.id,                                     // رقم الطلب
+            total,                                                // الإجمالي
+            address: formData.address,                              // العنوان
+            cartItems: cartItems.map(item => `${item.name} x${item.quantity}`).join(', '),
+            support_email: 'support@yourwebsite.com'                // بريد الدعم
+          },
+          'xpSKf6d4h11LzEOLz'      // نفس المفتاح العام
+        );
+      }
+
+      // تفريغ السلة بعد نجاح حفظ الطلب وإرسال الإشعارات
       clearCart();
-      
-      // Show success message
+
       toast({
         title: "تم إرسال الطلب بنجاح!",
-        description: `رقم الطلب: ${order.id}`,
+        description: `رقم الطلب: ${docRef.id} - شكراً لك ${formData.firstName} على طلبك!`,
         duration: 5000,
       });
-      
-      // Redirect to success page
+
+      // إعادة التوجيه إلى الصفحة الرئيسية أو إلى صفحة نجاح الطلب
       navigate('/');
-      
+    } catch (error) {
+      toast({
+        title: "حدث خطأ",
+        description: `لم يتم إرسال الطلب. حاول مرة أخرى. (${error.message})`,
+        duration: 5000,
+      });
+    } finally {
       setIsSubmitting(false);
-    }, 1500);
+    }
   };
-  
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {/* الحقول الشخصية */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label htmlFor="firstName" className="block text-sm font-medium mb-1">
@@ -82,7 +120,6 @@ const CheckoutForm = () => {
             required
           />
         </div>
-        
         <div>
           <label htmlFor="lastName" className="block text-sm font-medium mb-1">
             الاسم الأخير
@@ -96,7 +133,8 @@ const CheckoutForm = () => {
           />
         </div>
       </div>
-      
+
+      {/* الحقول للتواصل */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label htmlFor="email" className="block text-sm font-medium mb-1">
@@ -111,7 +149,6 @@ const CheckoutForm = () => {
             required
           />
         </div>
-        
         <div>
           <label htmlFor="phone" className="block text-sm font-medium mb-1">
             رقم الهاتف
@@ -126,7 +163,8 @@ const CheckoutForm = () => {
           />
         </div>
       </div>
-      
+
+      {/* عنوان الشحن */}
       <div>
         <label htmlFor="address" className="block text-sm font-medium mb-1">
           العنوان
@@ -139,7 +177,8 @@ const CheckoutForm = () => {
           required
         />
       </div>
-      
+
+      {/* المدينة والرمز البريدي */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label htmlFor="city" className="block text-sm font-medium mb-1">
@@ -153,7 +192,6 @@ const CheckoutForm = () => {
             required
           />
         </div>
-        
         <div>
           <label htmlFor="postalCode" className="block text-sm font-medium mb-1">
             الرمز البريدي
@@ -167,7 +205,8 @@ const CheckoutForm = () => {
           />
         </div>
       </div>
-      
+
+      {/* طريقة الدفع */}
       <div>
         <h3 className="text-lg font-medium mb-3">طريقة الدفع</h3>
         <div className="space-y-2">
@@ -185,7 +224,6 @@ const CheckoutForm = () => {
               الدفع عند الاستلام
             </label>
           </div>
-          
           <div className="flex items-center">
             <input
               id="bank"
@@ -202,7 +240,8 @@ const CheckoutForm = () => {
           </div>
         </div>
       </div>
-      
+
+      {/* زر الإرسال */}
       <Button 
         type="submit" 
         className="w-full"
