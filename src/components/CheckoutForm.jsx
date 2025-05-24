@@ -24,79 +24,77 @@ const CheckoutForm = () => {
     paymentMethod: 'cod',
   });
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
+  e.preventDefault();
+  setIsSubmitting(true);
 
-    try {
-      const order = {
+  try {
+    const order = {
+      ...formData,
+      cartItems,
+      createdAt: Timestamp.now(),
+    };
+
+    const docRef = await addDoc(collection(db, 'orders'), order);
+
+    const total =
+      cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0).toLocaleString() +
+      ' جنيه مصري';
+
+    const traderResponse = await emailjs.send(
+      'service_pllfmfx',
+      'template_z9q8e8p',
+      {
         ...formData,
-        cartItems,
-        createdAt: Timestamp.now(),
-      };
+        orderId: docRef.id,
+        cartItems: cartItems.map((item) => `${item.name} x${item.quantity}`).join(', '),
+        total,
+        address: formData.address,
+      },
+      'xpSKf6d4h11LzEOLz'
+    );
 
-      const docRef = await addDoc(collection(db, 'orders'), order);
-
-      const total =
-        cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0).toLocaleString() +
-        ' جنيه مصري';
-
-      const traderResponse = await emailjs.send(
+    if (traderResponse.status === 200) {
+      await emailjs.send(
         'service_pllfmfx',
-        'template_z9q8e8p',
+        'template_client',
         {
-          ...formData,
+          to_name: `${formData.firstName} ${formData.lastName}`,
+          to_email: formData.email,
           orderId: docRef.id,
-          cartItems: cartItems.map((item) => `${item.name} x${item.quantity}`).join(', '),
           total,
           address: formData.address,
+          cartItems: cartItems.map((item) => `${item.name} x${item.quantity}`).join(', '),
+          support_email: 'support@yourwebsite.com',
         },
         'xpSKf6d4h11LzEOLz'
       );
-
-      if (traderResponse.status === 200) {
-        await emailjs.send(
-          'service_pllfmfx',
-          'template_client',
-          {
-            to_name: `${formData.firstName} ${formData.lastName}`,
-            to_email: formData.email,
-            orderId: docRef.id,
-            total,
-            address: formData.address,
-            cartItems: cartItems.map((item) => `${item.name} x${item.quantity}`).join(', '),
-            support_email: 'support@yourwebsite.com',
-          },
-          'xpSKf6d4h11LzEOLz'
-        );
-      }
-
-      clearCart();
-
-      toast({
-        title: 'تم إرسال الطلب بنجاح!',
-        description: `رقم الطلب: ${docRef.id} - شكراً لك ${formData.firstName} على طلبك!`,
-        duration: 5000,
-      });
-
-      navigate('/');
-    } catch (error) {
-      toast({
-        title: 'حدث خطأ',
-        description: `لم يتم إرسال الطلب. حاول مرة أخرى. (${error.message})`,
-        duration: 5000,
-      });
-    } finally {
-      setIsSubmitting(false);
     }
-  };
+
+    clearCart();
+
+    toast({
+      title: 'تم إرسال الطلب بنجاح!',
+      description: `رقم الطلب: ${docRef.id} - شكراً لك ${formData.firstName} على طلبك!`,
+      duration: 5000,
+    });
+
+    navigate('/');
+  } catch (error) {
+    // عرض الخطأ للمستخدم بوضوح
+    toast({
+      title: 'حدث خطأ',
+      description: `لم يتم إرسال الطلب. حاول مرة أخرى. 
+        النوع: ${error.name || 'غير معروف'}
+        الرسالة: ${error.message || 'لا توجد رسالة'}
+        التفاصيل: ${JSON.stringify(error, null, 2)}`,
+      duration: 8000,
+      variant: 'destructive',
+    });
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
