@@ -6,7 +6,7 @@ import { useCart } from '@/contexts/CartContext';
 import { useToast } from '@/components/ui/use-toast';
 import { db } from '@/firebase';
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
-import emailjs from '@emailjs/browser'; // استيراد EmailJS
+import emailjs from '@emailjs/browser';
 
 const CheckoutForm = () => {
   const navigate = useNavigate();
@@ -21,14 +21,14 @@ const CheckoutForm = () => {
     address: '',
     city: '',
     postalCode: '',
-    paymentMethod: 'cod'
+    paymentMethod: 'cod',
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
@@ -36,70 +36,67 @@ const CheckoutForm = () => {
     setIsSubmitting(true);
 
     try {
-  const order = {
-    ...formData,
-    cartItems,
-    createdAt: Timestamp.now(),
+      const order = {
+        ...formData,
+        cartItems,
+        createdAt: Timestamp.now(),
+      };
+
+      const docRef = await addDoc(collection(db, 'orders'), order);
+
+      const total =
+        cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0).toLocaleString() +
+        ' جنيه مصري';
+
+      const traderResponse = await emailjs.send(
+        'service_pllfmfx',
+        'template_z9q8e8p',
+        {
+          ...formData,
+          orderId: docRef.id,
+          cartItems: cartItems.map((item) => `${item.name} x${item.quantity}`).join(', '),
+          total,
+          address: formData.address,
+        },
+        'xpSKf6d4h11LzEOLz'
+      );
+
+      if (traderResponse.status === 200) {
+        await emailjs.send(
+          'service_pllfmfx',
+          'template_client',
+          {
+            to_name: `${formData.firstName} ${formData.lastName}`,
+            to_email: formData.email,
+            orderId: docRef.id,
+            total,
+            address: formData.address,
+            cartItems: cartItems.map((item) => `${item.name} x${item.quantity}`).join(', '),
+            support_email: 'support@yourwebsite.com',
+          },
+          'xpSKf6d4h11LzEOLz'
+        );
+      }
+
+      clearCart();
+
+      toast({
+        title: 'تم إرسال الطلب بنجاح!',
+        description: `رقم الطلب: ${docRef.id} - شكراً لك ${formData.firstName} على طلبك!`,
+        duration: 5000,
+      });
+
+      navigate('/');
+    } catch (error) {
+      toast({
+        title: 'حدث خطأ',
+        description: `لم يتم إرسال الطلب. حاول مرة أخرى. (${error.message})`,
+        duration: 5000,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
-
-  // حفظ الطلب في قاعدة البيانات
-  const docRef = await addDoc(collection(db, 'orders'), order);
-
-  // حساب إجمالي السعر
-  const total = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0).toLocaleString() + ' جنيه مصري';
-
-  // إرسال بريد إلكتروني للتاجر
-  const traderResponse = await emailjs.send(
-    'service_pllfmfx', // ID الخدمة من EmailJS
-    'template_z9q8e8p', // قالب بريد التاجر
-    {
-      ...formData,
-      orderId: docRef.id,
-      cartItems: cartItems.map(item => `${item.name} x${item.quantity}`).join(', '),
-      total, // الإجمالي
-      address: formData.address, // العنوان
-    },
-    'xpSKf6d4h11LzEOLz' // المفتاح العام من EmailJS
-  );
-
-  // التحقق من نجاح إرسال بريد التاجر
-  if (traderResponse.status === 200) {
-    // إرسال بريد إلكتروني للعميل
-    await emailjs.send(
-      'service_pllfmfx', // نفس ID الخدمة
-      'template_client', // قالب بريد العميل
-      {
-        to_name: `${formData.firstName} ${formData.lastName}`, // اسم العميل
-        to_email: formData.email, // بريد العميل
-        orderId: docRef.id, // رقم الطلب
-        total, // الإجمالي
-        address: formData.address, // العنوان
-        cartItems: cartItems.map(item => `${item.name} x${item.quantity}`).join(', '), // تفاصيل الطلب
-        support_email: 'support@yourwebsite.com' // بريد الدعم
-      },
-      'xpSKf6d4h11LzEOLz' // نفس المفتاح العام
-    );
-  }
-
-  // تفريغ السلة بعد نجاح العملية
-  clearCart();
-
-  toast({
-    title: "تم إرسال الطلب بنجاح!",
-    description: `رقم الطلب: ${docRef.id} - شكراً لك ${formData.firstName} على طلبك!`,
-    duration: 5000,
-  });
-
-  navigate('/');
-} catch (error) {
-  toast({
-    title: "حدث خطأ",
-    description: `لم يتم إرسال الطلب. حاول مرة أخرى. (${error.message})`,
-    duration: 5000,
-  });
-} finally {
-  setIsSubmitting(false);
-}
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
